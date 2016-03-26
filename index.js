@@ -10,9 +10,11 @@ var AlexaSkill = require('./AlexaSkill');
 var SatTracker = function () {
     AlexaSkill.call(this, APP_ID);
 };
-
+var AWS = require('aws-sdk');
+AWS.config.update({region: 'us-east-1'});
 var doc = require("dynamodb-doc");
-var dynamo = new doc.DynamoDB();
+
+var dynamo = new AWS.DynamoDB();
 
 SatTracker.prototype = Object.create(AlexaSkill.prototype);
 SatTracker.prototype.constructor = SatTracker;
@@ -63,16 +65,19 @@ function getSatIntent(intent, session, response) {
     var citySlot = intent.slots.City;
     
     
-    if (zipSlot) {
-        var checkZip = getFiveDigitZip(zipSlot.value);
-    }
-     
-    var cardTitle = "Latitude and Longitude for " + zipSlot.value + " is ",
-        speechOutput,
-        repromptOutput;
-    
-    response.tell(cardTitle);
-    getZipcode(zipSlot.value, getSatIntent)
+//    if (zipSlot) {
+//        var checkZip = getFiveDigitZip(zipSlot.value);
+//    }
+//     
+//    var cardTitle = "Latitude and Longitude for " + zipSlot.value + " is " + ,
+//        speechOutput,
+//        repromptOutput;
+
+    //response.tell(cardTitle);
+    var info;
+    info = getZipcode(zipSlot.value)
+    console.log(info);
+    response.tellWithCard("hi teck","zip info from dynamoDB", info)
 };
 
     var zipCallback = function (err, zipcode) {
@@ -83,47 +88,62 @@ function getSatIntent(intent, session, response) {
         }
     }
     
-function getZipcode(zipcode, callback) {
+function getZipcode(zipCode) {
 
     var queryParams = {
         TableName: "ZipcodeUSA",
         KeyConditionExpression: "zipcode = :v_zipcode",
         ExpressionAttributeValues: {
-            ":v_zipcode": zipcode
+            ":v_zipcode": zipCode
         }
     };
-
-    dynamo.query(queryParams, function (err, data) {
-        var zipdata;
+    console.log("about to start dynamoDB query with zipcode: " + zipCode); 
+    dynamo.query(queryParams, function(err, data) {
+        if (err) {
+            console.log("error in dynamo.query of getZipcode funtion: " + err);
+        } else {
+        var zipData;
+        console.log("starting dynamoDB query with zipcode: " + zipCode); 
         if (data && data.Items && data.Items.length > 0) {
             console.log("Found " + data.Items.length + " matching zipcode");
             if (data.Items.length === 1) {
-                zipdata = data.Items[0];
+                zipData = data.Items[0];
+                return zipData;
             }
         }
         
-        if (err) {
-            console.log(err);
-        }         
-    })
+
+        }
+         console.log("completed dynamo.query with zipcode: " + err);
+    });    
 };
 
-function getFiveDigitZip(zipString) {
-    var temp = 0;
-    try {
-        var tokens = zipString.split(" ");
-        if (tokens.length === 5) {
-            temp = parseInt("" + singleDigitWordtoNum(tokens[0]) + singleDigitWordtoNum(tokens[1]) + singleDigitWordtoNum(tokens[2]) + singleDigitWordtoNum(tokens[3]) + singleDigitWordtoNum(tokens[4]));
-        }
-        else {
-            console.log("getFiveDigitZipSplitException", tokens, zipString);
-        }
-    }
-    catch (excp) {
-        console.log("getGiveDigitZipException", excp)
-    }
-    return temp;
-}
+//docClient.query(params, function(err, data) {
+//    if (err) {
+//        console.error("Unable to query. Error:", JSON.stringify(err, null, 2));
+//    } else {
+//        console.log("Query succeeded.");
+//        data.Items.forEach(function(item) {
+//            console.log(" -", item.year + ": " + item.title);
+//        });
+//    }
+//});
+//function getFiveDigitZip(zipString) {
+//    var temp = 0;
+//    try {
+//        var tokens = zipString.split(" ");
+//        if (tokens.length === 5) {
+//            temp = parseInt("" + singleDigitWordtoNum(tokens[0]) + singleDigitWordtoNum(tokens[1]) + singleDigitWordtoNum(tokens[2]) + singleDigitWordtoNum(tokens[3]) + singleDigitWordtoNum(tokens[4]));
+//        }
+//        else {
+//            console.log("getFiveDigitZipSplitException", tokens, zipString);
+//        }
+//    }
+//    catch (excp) {
+//        console.log("getGiveDigitZipException", excp)
+//    }
+//    return temp;
+//}
 exports.handler = function (event, context) {
     // Create an instance of the askQrz skill.
     var sattracker = new SatTracker();

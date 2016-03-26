@@ -1,0 +1,20 @@
+function getCity(city, callback) {
+        var queryParams = {
+        TableName: "ZipcodeUSA",
+        KeyConditionExpression: "city = :v_city",
+        ExpressionAttributeValues: {
+            ":v_city": city
+        }
+    };
+
+    dynamo.query(queryParams, function (err, data) {
+        var citydata;
+        if (data && data.Items && data.Items.length > 0) {
+            console.log("Found " + data.Items.length + " matching city");
+            if (data.Items.length === 1) {
+                citydata = data.Items[0];
+            }
+        }
+
+    })
+};
