@@ -14,7 +14,7 @@ var AWS = require('aws-sdk');
 AWS.config.update({region: 'us-east-1'});
 var doc = require("dynamodb-doc");
 
-var dynamo = new AWS.DynamoDB();
+var dynamodb = new AWS.DynamoDB.DocumentClient();
 
 SatTracker.prototype = Object.create(AlexaSkill.prototype);
 SatTracker.prototype.constructor = SatTracker;
@@ -86,24 +86,34 @@ function getSatIntent(intent, session, response) {
             
             
         }
-    }
-    
-function getZipcode(zipCode) {
-
-    var queryParams = {
-        TableName: "ZipcodeUSA",
-        KeyConditionExpression: "zipcode = :v_zipcode",
-        ExpressionAttributeValues: {
-            ":v_zipcode": zipCode
-        }
     };
-    console.log("about to start dynamoDB query with zipcode: " + zipCode); 
-    dynamo.query(queryParams, function(err, data) {
+    
+function getZipcode(zipcode) {
+
+//    var queryParams = {
+//        TableName: "ZipcodeUSA",
+//        KeyConditionExpression: "zipcode = :v_zipcode",
+//        ExpressionAttributeValues: {
+//            ":v_zipcode": zipCode
+//        }
+//    };
+    var queryParams = {
+        TableName : "ZipcodeUSA",
+        KeyConditionExpression: "#zc = :zip",
+        ExpressionAttributeNames:{
+            "#zc": "city"
+        },
+        ExpressionAttributeValues: {
+            ":zip":zipcode
+        }
+    };    
+    console.log("about to start dynamoDB query with zipcode: " + zipcode); 
+    dynamodb.query(queryParams, function(err, data) {
         if (err) {
             console.log("error in dynamo.query of getZipcode funtion: " + err);
         } else {
         var zipData;
-        console.log("starting dynamoDB query with zipcode: " + zipCode); 
+        console.log("starting dynamoDB query with zipcode: " + zipcode); 
         if (data && data.Items && data.Items.length > 0) {
             console.log("Found " + data.Items.length + " matching zipcode");
             if (data.Items.length === 1) {
