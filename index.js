@@ -14,7 +14,7 @@ var AWS = require('aws-sdk');
 AWS.config.update({region: 'us-east-1'});
 var doc = require("dynamodb-doc");
 
-var dynamodb = new AWS.DynamoDB.DocumentClient();
+var dynamodb = new AWS.DynamoDB();
 
 SatTracker.prototype = Object.create(AlexaSkill.prototype);
 SatTracker.prototype.constructor = SatTracker;
@@ -80,13 +80,13 @@ function getSatIntent(intent, session, response) {
     response.tellWithCard("hi teck","zip info from dynamoDB", info)
 };
 
-    var zipCallback = function (err, zipcode) {
-        if (zipcode) {
-            console.log("Retrieved zip: " + JSON.stringify(zipcode));
-            
-            
-        }
-    };
+//    var zipCallback = function (err, zipcode) {
+//        if (zipcode) {
+//            console.log("Retrieved zip: " + JSON.stringify(zipcode));
+//            
+//            
+//        }
+//    };
     
 function getZipcode(zipcode) {
 
@@ -99,45 +99,53 @@ function getZipcode(zipcode) {
 //    };
     var queryParams = {
         TableName : "ZipcodeUSA",
-        KeyConditionExpression: "#zc = :zip",
-        ExpressionAttributeNames:{
-            "#zc": "city"
-        },
-        ExpressionAttributeValues: {
-            ":zip":zipcode
-        }
-    };    
-    console.log("about to start dynamoDB query with zipcode: " + zipcode); 
-    dynamodb.query(queryParams, function(err, data) {
-        if (err) {
-            console.log("error in dynamo.query of getZipcode funtion: " + err);
-        } else {
-        var zipData;
-        console.log("starting dynamoDB query with zipcode: " + zipcode); 
-        if (data && data.Items && data.Items.length > 0) {
-            console.log("Found " + data.Items.length + " matching zipcode");
-            if (data.Items.length === 1) {
-                zipData = data.Items[0];
-                return zipData;
+//        KeyConditionExpression: "zipcode",
+////        ExpressionAttributeNames:{
+////            "#zc": "zipcode"
+////        },
+////        ExpressionAttributeValues:{
+////            ":zip": {"S": zipcode,}
+////        },
+        ComparisonOperator: "EQ",
+        KeyConditions: {
+            "zipcode" : {
+                AttributeValueList: [
+                    {"S": zipcode,}
+               ],
+                
             }
         }
         
+    };    
+    console.log("about to start dynamoDB query with zipcode: " + zipcode); 
+//    dynamodb.query(queryParams, function(err, data) {
+//        if (err) {
+//            console.log("error in dynamo.query of getZipcode funtion: " + err);
+//        } else {
+//        
+//        console.log("starting dynamoDB query with zipcode: " + zipcode); 
+//        if (data && data.Items && data.Items.length > 0) {
+//            console.log("Found " + data.Items.length + " matching zipcode");
+//            if (data.Items.length === 1) {
+//                return data.Items[0];
+//            }
+//        }
+//        
+//
+//        }
+//         console.log("completed dynamo.query with zipcode: " + err);
+//    });    
+//}
 
-        }
-         console.log("completed dynamo.query with zipcode: " + err);
-    });    
-};
-
-//docClient.query(params, function(err, data) {
-//    if (err) {
-//        console.error("Unable to query. Error:", JSON.stringify(err, null, 2));
-//    } else {
-//        console.log("Query succeeded.");
-//        data.Items.forEach(function(item) {
-//            console.log(" -", item.year + ": " + item.title);
-//        });
-//    }
-//});
+dynamodb.query(queryParams, function(err, data) {
+    if (err) {
+        console.error("Unable to query. Error:", JSON.stringify(err, null, 2));
+    } else {
+        console.log("Query succeeded.");
+        return data.Items[0];
+    }
+});
+}
 //function getFiveDigitZip(zipString) {
 //    var temp = 0;
 //    try {
@@ -156,6 +164,6 @@ function getZipcode(zipcode) {
 //}
 exports.handler = function (event, context) {
     // Create an instance of the askQrz skill.
-    var sattracker = new SatTracker();
-    sattracker.execute(event, context);
+    var satellitetracker = new SatTracker();
+    satellitetracker.execute(event, context);
 };
