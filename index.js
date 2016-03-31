@@ -74,9 +74,8 @@ function getSatIntent(intent, session, response) {
 //        repromptOutput;
 
     //response.tell(cardTitle);
-    var info;
-    info = getZipcode(zipSlot.value)
-    console.log(info);
+    var info = getZipcode(zipSlot.value);
+    //console.log(info);
     response.tellWithCard("hi teck","zip info from dynamoDB", info)
 };
 
@@ -99,19 +98,19 @@ function getZipcode(zipcode) {
 //    };
     var queryParams = {
         TableName : "ZipcodeUSA",
-//        KeyConditionExpression: "zipcode",
-////        ExpressionAttributeNames:{
-////            "#zc": "zipcode"
-////        },
-////        ExpressionAttributeValues:{
-////            ":zip": {"S": zipcode,}
-////        },
-        ComparisonOperator: "EQ",
+//        KeyConditionExpression: "#zc = :zipcode",
+//        ExpressionAttributeNames:{
+//            "#zc": "zipcode"
+//        },
+//        ExpressionAttributeValues: {
+//            ":zipcode": {"S": "94108",}
+//        }
+        "ComparisonOperator": "EQ",
         KeyConditions: {
             "zipcode" : {
-                AttributeValueList: [
-                    {"S": zipcode,}
-               ],
+                "AttributeValueList": [
+                    {"S": "zipcode",}
+               ]
                 
             }
         }
@@ -136,16 +135,18 @@ function getZipcode(zipcode) {
 //         console.log("completed dynamo.query with zipcode: " + err);
 //    });    
 //}
-
+console.log("queryParams prior to dynamodb.query: " + queryParams)
 dynamodb.query(queryParams, function(err, data) {
+    console.log("queryParams: " + queryParams)
+    console.log("data: " + data)    
     if (err) {
-        console.error("Unable to query. Error:", JSON.stringify(err, null, 2));
+        console.error(err);
     } else {
         console.log("Query succeeded.");
         return data.Items[0];
     }
 });
-}
+};
 //function getFiveDigitZip(zipString) {
 //    var temp = 0;
 //    try {
