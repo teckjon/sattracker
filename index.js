@@ -10,12 +10,12 @@ var AlexaSkill = require('./AlexaSkill');
 var SatTracker = function () {
     AlexaSkill.call(this, APP_ID);
 };
-var AWS = require('aws-sdk');
-AWS.config.update({region: 'us-east-1'});
+var AWS = require("aws-sdk");
+AWS.config.update({region: "us-east-1"});
 var doc = require("dynamodb-doc");
-
-var dynamodb = new AWS.DynamoDB();
-
+var request = require("request");
+//var dynamodb = new AWS.DynamoDB();
+var dynamodb = new AWS.DynamoDB.DocumentClient();
 SatTracker.prototype = Object.create(AlexaSkill.prototype);
 SatTracker.prototype.constructor = SatTracker;
 
@@ -29,8 +29,8 @@ SatTracker.prototype.eventHandlers.onSessionStarted = function (sessionStartedRe
 SatTracker.prototype.eventHandlers.onLaunch = function (launchRequest, session, response) {
     console.log("SatTracker onLaunch requestId: " + launchRequest.requestId + ", sessionId: " + session.sessionId);
 
-    var speechOutput = "Sat Tracker is running, please say a city or zipcode and I will respond with the closest satellite.";
-    var repromptText = "Please say a city or zipcode.";
+    var speechOutput = "Sat Tracker is running, please say a zipcode and I will respond with the closest satellite.";
+    var repromptText = "Please say a zipcode.";
     response.ask(speechOutput, repromptText);
 };
 
@@ -41,13 +41,9 @@ SatTracker.prototype.eventHandlers.onSessionEnded = function (sessionEndedReques
 SatTracker.prototype.intentHandlers = {
     
     "GetSatelliteIntent": getSatIntent,
-    //"GetSatelliteIntent": function (intent, session, response) {
-        //response.tell(intent.slots.Zipcode.value);
-    //},    
-    
-    
+
     "AMAZON.HelpIntent": function (intent, session, response) {
-        response.ask("You can ask Sat Tracker for name of the satellite closest to your city or zip code.");
+        response.ask("You can ask Sat Tracker for name of the satellite closest to your zip code.");
     },
     "AMAZON.StopIntent": function (intent, session, response) {
         var speechOutput = "Goodbye";
@@ -72,81 +68,77 @@ function getSatIntent(intent, session, response) {
 //    var cardTitle = "Latitude and Longitude for " + zipSlot.value + " is " + ,
 //        speechOutput,
 //        repromptOutput;
-
-    //response.tell(cardTitle);
-    var info = getZipcode(zipSlot.value);
-    //console.log(info);
-    response.tellWithCard("hi teck","zip info from dynamoDB", info)
+    var info = getZipcode(zipSlot.value, function(value) {
+        console.log("starting getZipcode" + value);
+        var final = lookupSatelliteFromNASA(value, function(info) {
+            response.tellWithCard("hi teck","zip info from dynamoDB", final);                               
+        });
+    });
 };
 
-//    var zipCallback = function (err, zipcode) {
-//        if (zipcode) {
-//            console.log("Retrieved zip: " + JSON.stringify(zipcode));
-//            
-//            
-//        }
-//    };
     
-function getZipcode(zipcode) {
+function getZipcode(zipcode, callback) {
 
-//    var queryParams = {
-//        TableName: "ZipcodeUSA",
-//        KeyConditionExpression: "zipcode = :v_zipcode",
-//        ExpressionAttributeValues: {
-//            ":v_zipcode": zipCode
-//        }
-//    };
     var queryParams = {
         TableName : "ZipcodeUSA",
-//        KeyConditionExpression: "#zc = :zipcode",
-//        ExpressionAttributeNames:{
-//            "#zc": "zipcode"
-//        },
-//        ExpressionAttributeValues: {
-//            ":zipcode": {"S": "94108",}
-//        }
-        "ComparisonOperator": "EQ",
-        KeyConditions: {
-            "zipcode" : {
-                "AttributeValueList": [
-                    {"S": "zipcode",}
-               ]
-                
-            }
-        }
+
+        KeyConditionExpression: "#zc = :zipcode",
         
-    };    
-    console.log("about to start dynamoDB query with zipcode: " + zipcode); 
-//    dynamodb.query(queryParams, function(err, data) {
-//        if (err) {
-//            console.log("error in dynamo.query of getZipcode funtion: " + err);
-//        } else {
-//        
-//        console.log("starting dynamoDB query with zipcode: " + zipcode); 
-//        if (data && data.Items && data.Items.length > 0) {
-//            console.log("Found " + data.Items.length + " matching zipcode");
-//            if (data.Items.length === 1) {
-//                return data.Items[0];
-//            }
-//        }
-//        
-//
-//        }
-//         console.log("completed dynamo.query with zipcode: " + err);
-//    });    
-//}
+        ExpressionAttributeNames:{
+            "#zc": "zipcode"
+        },
+        ExpressionAttributeValues: {
+            ":zipcode": zipcode,
+        }, 
+        "ComparisonOperator": "EQ",
+        "ProjectionExpression": "latitude, longitude"
+    };
+
 console.log("queryParams prior to dynamodb.query: " + queryParams)
 dynamodb.query(queryParams, function(err, data) {
-    console.log("queryParams: " + queryParams)
-    console.log("data: " + data)    
+    console.log("data: " + data);
     if (err) {
-        console.error(err);
+        console.log (err);
+        callback(err);
     } else {
-        console.log("Query succeeded.");
-        return data.Items[0];
+        callback(data);
+        console.log("Query succeeded.");   
+//        lookupSatelliteFromNASA(zipcode, function(err, license){
+//            
+//        })
     }
-});
+    });  
 };
+
+function lookupSatelliteFromNASA(getZipcode, callback) {
+    var latitude = getZipcode.Items[0].latitude;
+       console.log("latitude set " + latitude);
+    var longitude = getZipcode.Items[0].longitude;
+       console.log("longitude set " + longitude);       
+    var url = "http://api.open-notify.org/iss-pass.json?lat=" + latitude + "&lon=" + longitude;
+    
+    var handleResponse = function(err, result) {
+        console.log("lookup done: " + JSON.stringify(result));
+        if (err) {
+            console.log(err);
+        } else {
+            callback(result);
+            var passtime = new Date(result.response[0].risetime*1000);
+            passtime.toLocaleString();
+            console.log("iss query succeeded. " + passtime.toLocaleString());
+        }
+    };
+    
+    request(url, function (err, httpresp, body) {
+        if (!err && httpresp.statusCode === 200) {
+            var result = JSON.parse(body);
+            handleResponse(null, result);
+        } else {
+            callback(err);
+        }
+    });    
+}
+//console.log("after query")
 //function getFiveDigitZip(zipString) {
 //    var temp = 0;
 //    try {
@@ -164,7 +156,7 @@ dynamodb.query(queryParams, function(err, data) {
 //    return temp;
 //}
 exports.handler = function (event, context) {
-    // Create an instance of the askQrz skill.
+    // Create an instance of the SatTracker skill.
     var satellitetracker = new SatTracker();
     satellitetracker.execute(event, context);
 };
