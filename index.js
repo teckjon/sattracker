@@ -13,12 +13,13 @@ var SatTracker = function () {
 var AWS = require("aws-sdk");
 AWS.config.update({region: "us-east-1"});
 var doc = require("dynamodb-doc");
-//var tzwhere = require('tzwhere')
-//tzwhere.init();
+
 var ok = require("assert")
     , eq = require("assert").equal
     , tz = require("timezone");
+var us = tz(require("timezone/America"));
 var tzlookup = require("tz-lookup");
+var moment = require("moment-timezone");
 var request = require("request");
 var dynamodb = new AWS.DynamoDB.DocumentClient();
 SatTracker.prototype = Object.create(AlexaSkill.prototype);
@@ -70,14 +71,11 @@ function getSatIntent(intent, session, response) {
         var speechOutput = "The ISS will pass over " + zipSlot.value + "on " + session.attribute.final + "."
         response.tell(speechOutput);
     }
-//     
-//    var cardTitle = "Latitude and Longitude for " + zipSlot.value + " is " + ,
-//        speechOutput,
-//        repromptOutput;
+
     var info = getZipcode(zipSlot.value, function(value) {
         console.log("starting getZipcode" + value);
         var final = lookupSatelliteFromNASA(value, function(info) {
-            response.tellWithCard("hi teck","zip info from dynamoDB", info);                               
+        response.tellWithCard(info, "Test", info);                             
         });
         session.attributes.final = final;
     }); 
@@ -140,13 +138,16 @@ function lookupSatelliteFromNASA(getZipcode, callback) {
             console.log("ISS API passtime UTC " + isstime);
             var convertUTC = tz(passtime);
             var realtime = new Date(convertUTC);
-            console.log("Time zone convert " + convertUTC);
-            console.log("iss query succeeded. " + realtime);
-            var info = "The ISS will pass over " + realtime + "."
+//            var currenttime = moment.tz(realtime, timezone).format('Z');
+            var currenttime = moment(realtime).tz(timezone).format('MMMM Do YYYY, h:mm:ss a');
+            console.log("Time zone convert " + convertUTC + " Correct Time zone is " + currenttime);
+            console.log("iss query succeeded. " + currenttime);
+            var info = "The ISS will pass over " + currenttime + "."
+
             callback(info);
         }
     };
-    
+
     request(url, function (err, httpresp, body) {
         if (!err && httpresp.statusCode === 200) {
             var result = JSON.parse(body);
