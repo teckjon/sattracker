@@ -7,7 +7,7 @@ var AlexaSkill = require('./AlexaSkill');
 
 
 
-var SatTracker = function () {
+var ISStracker = function () {
     AlexaSkill.call(this, APP_ID);
 };
 var AWS = require("aws-sdk");
@@ -22,34 +22,34 @@ var tzlookup = require("tz-lookup");
 var moment = require("moment-timezone");
 var request = require("request");
 var dynamodb = new AWS.DynamoDB.DocumentClient();
-SatTracker.prototype = Object.create(AlexaSkill.prototype);
-SatTracker.prototype.constructor = SatTracker;
+ISStracker.prototype = Object.create(AlexaSkill.prototype);
+ISStracker.prototype.constructor = ISStracker;
 
-SatTracker.prototype.eventHandlers.onSessionStarted = function (sessionStartedRequest, session) {
-    console.log("SatTracker onSessionStarted requestId: " +
+ISStracker.prototype.eventHandlers.onSessionStarted = function (sessionStartedRequest, session) {
+    console.log("ISStracker onSessionStarted requestId: " +
                 sessionStartedRequest.requestId +
                 ", sessionId: " +
                 session.sessionId);
 };
 
-SatTracker.prototype.eventHandlers.onLaunch = function (launchRequest, session, response) {
-    console.log("SatTracker onLaunch requestId: " + launchRequest.requestId + ", sessionId: " + session.sessionId);
+ISStracker.prototype.eventHandlers.onLaunch = function (launchRequest, session, response) {
+    console.log("ISStracker onLaunch requestId: " + launchRequest.requestId + ", sessionId: " + session.sessionId);
 
     var speechOutput = "Sat Tracker is running, please say a zipcode and I will respond with the closest satellite.";
     var repromptText = "Please say a zipcode.";
     response.ask(speechOutput, repromptText);
 };
 
-SatTracker.prototype.eventHandlers.onSessionEnded = function (sessionEndedRequest, session) {
-    console.log("SatTracker onSessionEnded requestId: " + sessionEndedRequest.requestId + ", sessionId: " + session.sessionId);
+ISStracker.prototype.eventHandlers.onSessionEnded = function (sessionEndedRequest, session) {
+    console.log("ISStracker onSessionEnded requestId: " + sessionEndedRequest.requestId + ", sessionId: " + session.sessionId);
 };
 
-SatTracker.prototype.intentHandlers = {
+ISStracker.prototype.intentHandlers = {
     
-    "GetSatelliteIntent": getSatIntent,
+    "GetSatelliteIntent": getISSIntent,
 
     "AMAZON.HelpIntent": function (intent, session, response) {
-        response.ask("You can ask Sat Tracker for name of the satellite closest to your zip code.");
+        response.ask("You can ask ISS Tracker for the time the ISS will pass over your zip code.");
     },
     "AMAZON.StopIntent": function (intent, session, response) {
         var speechOutput = "Goodbye";
@@ -61,27 +61,34 @@ SatTracker.prototype.intentHandlers = {
     }
 };
 
-function getSatIntent(intent, session, response) {
-    console.log("getSatIntent handling starting");
+function getISSIntent(intent, session, response) {
+    console.log("getISSIntent handling starting");
     var zipSlot = intent.slots.Zipcode;
-//    var citySlot = intent.slots.City;
-    var validZip = getFiveDigitZip(zipSlot.value);
-    console.log("validating zipcode" + validZip);
-    if (validZip == zipSlot.value) {
-        var speechOutput = "The ISS will pass over " + zipSlot.value + "on " + session.attribute.final + "."
-        response.tell(speechOutput);
+//    var validZip = getFiveDigitZip(zipSlot.value);
+//    console.log("validating zipcode " + validZip);
+    
+//    if (validZip == zipSlot.value) {
+//        var speechOutput = "The ISS will pass over " + zipSlot.value + "on " + session.attribute.final + "."
+//        response.tell(speechOutput);
+//    }
+    if (!zipSlot || (zipSlot.length != 5)) {
+        console.log("Error with zipcode input.")
+        var speech = "I'm sorry, please say a valid five digit zipcode and I will find the next ISS pass time.";
+        var reprompt = "Please say a zipcode.";
+        response.ask(speech, reprompt);
+        return;
     }
-
     var info = getZipcode(zipSlot.value, function(value) {
-        console.log("starting getZipcode" + value);
-        var final = lookupSatelliteFromNASA(value, function(info) {
+        console.log("starting getZipcode" + value); 
+
+        var final = lookupISS(value, function(info) {
         response.tellWithCard(info, "Test", info);                             
+        
         });
-        session.attributes.final = final;
     }); 
 };
 
-    
+// Query DynamoDB     
 function getZipcode(zipcode, callback) {
 
     var queryParams = {
@@ -99,23 +106,28 @@ function getZipcode(zipcode, callback) {
         "ProjectionExpression": "latitude, longitude"
     };
 
-console.log("queryParams prior to dynamodb.query: " + queryParams)
-dynamodb.query(queryParams, function(err, data) {
+    console.log("queryParams prior to dynamodb.query: " + queryParams)
+    dynamodb.query(queryParams, function(err, data) {
     console.log("data: " + data);
-    if (err) {
-        console.log (err);
+    
+        if (err) {
+        console.log ("Query failed at DynamoDB " + err);
         callback(err);
     } else {
         callback(data);
         console.log("Query succeeded.");   
-//        lookupSatelliteFromNASA(zipcode, function(err, license){
-//            
-//        })
     }
     });  
 };
 
-function lookupSatelliteFromNASA(getZipcode, callback) {
+// Query ISS pass API
+function lookupISS(getZipcode, callback) {
+    
+    if (getZipcode.Items[0] == null) {
+        console.log("Invalid zipcode")
+        var speech = "I'm sorry, please say a valid five digit zipcode and I will find the next ISS pass time.";
+        callback(speech);
+    } else {
     var latitude = getZipcode.Items[0].latitude;
        console.log("latitude set " + latitude);
     var longitude = getZipcode.Items[0].longitude;
@@ -123,30 +135,30 @@ function lookupSatelliteFromNASA(getZipcode, callback) {
     var url = "http://api.open-notify.org/iss-pass.json?lat=" + latitude + "&lon=" + longitude;
     
     var handleResponse = function(err, result) {
+        var speech = "I'm sorry, there was an error looking up data from the ISS API.";
         console.log("lookup done: " + JSON.stringify(result));
-        if (err) {
-            console.log(err);
+        if (err) {            
+            console.log("There was an error " + err);
+            callback(speech);
         } else {
-            // Convert UTC time to correct timezone
+            // Find Time Zone
             var timezone = tzlookup(latitude, longitude);
             console.log("Testing library " + tzlookup(latitude, longitude));
-            
-//            console.log(tzwhere.tzOffsetAt(whiteHouse['lat'], whiteHouse['lng']));
-//            var timezoneoffset = tzwhere.tzOffsetAt(location['lat'], location['lng']);
+            // Convert UTC seconds to M:D:Y, H:M:S format
             var isstime = result.response[0].risetime*1000;
             var passtime = new Date(isstime);
             console.log("ISS API passtime UTC " + isstime);
             var convertUTC = tz(passtime);
             var realtime = new Date(convertUTC);
-//            var currenttime = moment.tz(realtime, timezone).format('Z');
             var currenttime = moment(realtime).tz(timezone).format('MMMM Do YYYY, h:mm:ss a');
             console.log("Time zone convert " + convertUTC + " Correct Time zone is " + currenttime);
             console.log("iss query succeeded. " + currenttime);
+            // voice response
             var info = "The ISS will pass over " + currenttime + "."
 
             callback(info);
         }
-    };
+    }};
 
     request(url, function (err, httpresp, body) {
         if (!err && httpresp.statusCode === 200) {
@@ -158,25 +170,25 @@ function lookupSatelliteFromNASA(getZipcode, callback) {
         }
     });    
 }
-
-function getFiveDigitZip(zipString) {
-    var temp = 0;
-    try {
-        var tokens = zipString.split(" ");
-        if (tokens.length === 5) {
-            temp = parseInt("" + singleDigitWordtoNum(tokens[0]) + singleDigitWordtoNum(tokens[1]) + singleDigitWordtoNum(tokens[2]) + singleDigitWordtoNum(tokens[3]) + singleDigitWordtoNum(tokens[4]));
-        }
-        else {
-            console.log("getFiveDigitZipSplitException", tokens, zipString);
-        }
-    }
-    catch (excp) {
-        console.log("getGiveDigitZipException", excp)
-    }
-    return temp;
-}
+// Might be useful to validate zipcode
+//function getFiveDigitZip(zipString) {
+//    var temp = 0;
+//    try {
+//        var tokens = zipString.split(" ");
+//        if (tokens.length === 5) {
+//            temp = parseInt("" + singleDigitWordtoNum(tokens[0]) + singleDigitWordtoNum(tokens[1]) + singleDigitWordtoNum(tokens[2]) + singleDigitWordtoNum(tokens[3]) + singleDigitWordtoNum(tokens[4]));
+//        }
+//        else {
+//            console.log("getFiveDigitZipSplitException", tokens, zipString);
+//        }
+//    }
+//    catch (excp) {
+//        console.log("getGiveDigitZipException", excp)
+//    }
+//    return temp;
+//}
 exports.handler = function (event, context) {
-    // Create an instance of the SatTracker skill.
-    var satellitetracker = new SatTracker();
+    // Create an instance of the ISStracker skill.
+    var satellitetracker = new ISStracker();
     satellitetracker.execute(event, context);
 };
